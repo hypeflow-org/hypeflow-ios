@@ -42,18 +42,25 @@ final class SearchViewModel {
 
         let calendar = Calendar.current
         let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -7, to: endDate)!
+        let storedTimeframe = UserDefaults.standard.integer(forKey: "timeframe")
+        let days = storedTimeframe > 0 ? storedTimeframe : 7
+        let startDate = calendar.date(byAdding: .day, value: -days, to: endDate)!
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
 
+        let sourcesRaw = UserDefaults.standard.string(forKey: "enabledSourceIds") ?? ""
+        let enabledSources: [String]? = sourcesRaw.isEmpty
+            ? nil
+            : sourcesRaw.split(separator: ",").map(String.init)
+
         let request = TimeseriesRequestDTO(
             word: trimmed,
             startDate: formatter.string(from: startDate),
             endDate: formatter.string(from: endDate),
-            sources: nil
+            sources: enabledSources
         )
 
         do {

@@ -45,12 +45,20 @@ struct SearchView: View {
             Task { await viewModel.search() }
         }
         .navigationTitle("Search")
-        .toolbar {
+        .safeAreaInset(edge: .top) {
             if viewModel.state.caseName != "idle" {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("New Search") {
-                        viewModel.resetToIdle()
-                    }
+                controlRow
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gearshape")
                 }
             }
         }
@@ -119,6 +127,17 @@ struct SearchView: View {
         ScrollView {
             VStack(spacing: 16) {
                 summaryCard(response)
+
+                if !response.dailyStatistics.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Activity")
+                            .font(.headline)
+
+                        SparklineView(values: response.dailyStatistics.map { Double($0.mentions) })
+                            .frame(height: 80)
+                    }
+                    .cardStyle()
+                }
 
                 if !response.perSource.isEmpty {
                     perSourceSection(response.perSource)
@@ -191,6 +210,27 @@ struct SearchView: View {
             }
         }
         .cardStyle()
+    }
+
+    // MARK: - Control Row
+
+    private var controlRow: some View {
+        HStack {
+            Button("Start new search") {
+                viewModel.resetToIdle()
+            }
+            .buttonStyle(.bordered)
+
+            Spacer()
+
+            NavigationLink {
+                SettingsView()
+            } label: {
+                Label("Search settings", systemImage: "slider.horizontal.3")
+            }
+            .buttonStyle(.borderless)
+        }
+        .font(.subheadline)
     }
 
     // MARK: - Errors

@@ -3,7 +3,7 @@ import SwiftUI
 struct RootView: View {
     var body: some View {
         TabView {
-            Tab("Trending", systemImage: "flame.fill") {
+            Tab("Trends", systemImage: "flame.fill") {
                 NavigationStack {
                     TrendingView()
                 }

@@ -31,6 +31,7 @@ protocol APIClientProtocol: Sendable {
     func fetchTrending() async throws -> [TrendDTO]
     func fetchPopular(limit: Int) async throws -> [PopularWordDTO]
     func fetchTimeseries(_ request: TimeseriesRequestDTO) async throws -> TimeseriesResponseDTO
+    func fetchSources() async throws -> [SourceDTO]
 }
 
 // MARK: - Implementation
@@ -140,6 +141,35 @@ final class APIClient: APIClientProtocol {
 
         do {
             return try decoder.decode(TimeseriesResponseDTO.self, from: data)
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+
+    func fetchSources() async throws -> [SourceDTO] {
+        guard let url = URL(string: "\(baseURL)/api/sources") else {
+            throw APIError.invalidURL
+        }
+
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            throw APIError.networkError(error)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.networkError(URLError(.badServerResponse))
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(statusCode: http.statusCode)
+        }
+
+        do {
+            return try decoder.decode([SourceDTO].self, from: data)
         } catch {
             throw APIError.decodingError(error)
         }

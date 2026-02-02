@@ -16,12 +16,15 @@ extension TrendDTO {
         let primarySource = sources.first ?? "unknown"
         let (displayName, category) = Self.mapSource(primarySource)
         let parsedDate = Self.parseDate(searchedAt) ?? Date()
+        let idTail = searchedAt.isEmpty ? UUID().uuidString : searchedAt
 
         return TrendUI(
-            id: "\(primarySource)|\(word)|\(startDate)|\(endDate)",
+            id: "\(primarySource)|\(word)|\(startDate)|\(endDate)|\(idTail)",
+            keyword: word,
             title: word.capitalized,
             source: displayName,
             sourceCategory: category,
+            sources: sources,
             mentions: totalMentions ?? 0,
             changePercent: 0,
             summary: Self.buildSummary(startDate: startDate, endDate: endDate, sources: sources),

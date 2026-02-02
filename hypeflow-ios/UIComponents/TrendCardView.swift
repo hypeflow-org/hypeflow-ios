@@ -17,13 +17,27 @@ struct TrendCardView: View {
 
                 Spacer()
 
-                SourceBadgeView(source: trend.source, category: trend.sourceCategory)
+                if trend.sources.count > 1 {
+                    Label("\(trend.sources.count) sources", systemImage: "square.stack.3d.up")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.quaternary)
+                        .clipShape(Capsule())
+                } else {
+                    SourceBadgeView(source: trend.source, category: trend.sourceCategory)
+                }
             }
 
             Text(trend.summary)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            if let values = trend.sparklineValues, !values.isEmpty {
+                SparklineView(values: values)
+                    .frame(height: 36)
+            }
 
             HStack {
                 Label(trend.mentionsText, systemImage: "chart.bar.fill")

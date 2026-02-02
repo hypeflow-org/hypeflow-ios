@@ -46,7 +46,7 @@ struct TrendingView: View {
                 }
             }
         }
-        .navigationTitle("Trending")
+        .navigationTitle("Trends")
         .navigationDestination(for: TrendUI.self) { trend in
             TrendDetailsView(trend: trend)
         }
