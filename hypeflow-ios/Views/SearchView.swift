@@ -25,7 +25,7 @@ struct SearchView: View {
 
                         Spacer()
 
-                        Text(formattedMentions(trend.mentions))
+                        Text(trend.mentionsText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -39,14 +39,6 @@ struct SearchView: View {
         }
     }
 
-    private func formattedMentions(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000)
-        }
-        return "\(count)"
-    }
 }
 
 #Preview {

@@ -28,14 +28,14 @@ struct TrendDetailsView: View {
                     HStack(spacing: 24) {
                         StatView(
                             label: "Total",
-                            value: formattedMentions,
+                            value: trend.mentionsText,
                             icon: "chart.bar.fill"
                         )
 
                         StatView(
                             label: "Change",
-                            value: String(format: "%+.1f%%", trend.changePercent),
-                            icon: trend.changePercent >= 0 ? "arrow.up.right" : "arrow.down.right",
+                            value: trend.changeText,
+                            icon: trend.changeIcon,
                             valueColor: trend.changePercent >= 0 ? .green : .red
                         )
 
@@ -65,14 +65,6 @@ struct TrendDetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var formattedMentions: String {
-        if trend.mentions >= 1_000_000 {
-            return String(format: "%.1fM", Double(trend.mentions) / 1_000_000)
-        } else if trend.mentions >= 1_000 {
-            return String(format: "%.1fK", Double(trend.mentions) / 1_000)
-        }
-        return "\(trend.mentions)"
-    }
 }
 
 // MARK: - Stat subview

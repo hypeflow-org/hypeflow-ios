@@ -1,7 +1,7 @@
 import Foundation
 
 struct TrendUI: Identifiable, Hashable {
-    let id = UUID()
+    let id: String
     let title: String
     let source: String
     let sourceCategory: SourceCategory
@@ -9,6 +9,23 @@ struct TrendUI: Identifiable, Hashable {
     let changePercent: Double
     let summary: String
     let date: Date
+
+    var mentionsText: String {
+        if mentions >= 1_000_000 {
+            return String(format: "%.1fM", Double(mentions) / 1_000_000)
+        } else if mentions >= 1_000 {
+            return String(format: "%.1fK", Double(mentions) / 1_000)
+        }
+        return "\(mentions)"
+    }
+
+    var changeText: String {
+        String(format: "%+.1f%%", changePercent)
+    }
+
+    var changeIcon: String {
+        changePercent >= 0 ? "arrow.up.right" : "arrow.down.right"
+    }
 
     enum SourceCategory: String, CaseIterable, Hashable {
         case encyclopedia
@@ -52,6 +69,7 @@ extension TrendUI {
 
         return [
             TrendUI(
+                id: "wikipedia|swift",
                 title: "Swift",
                 source: "Wikipedia",
                 sourceCategory: .encyclopedia,
@@ -61,6 +79,7 @@ extension TrendUI {
                 date: date(daysAgo: 0)
             ),
             TrendUI(
+                id: "hackernews|rust",
                 title: "Rust",
                 source: "HackerNews",
                 sourceCategory: .tech,
@@ -70,6 +89,7 @@ extension TrendUI {
                 date: date(daysAgo: 0)
             ),
             TrendUI(
+                id: "gdelt|gpt-5",
                 title: "GPT-5",
                 source: "GDELT",
                 sourceCategory: .news,
@@ -79,6 +99,7 @@ extension TrendUI {
                 date: date(daysAgo: 1)
             ),
             TrendUI(
+                id: "stackexchange|kubernetes",
                 title: "Kubernetes",
                 source: "StackExchange",
                 sourceCategory: .tech,
@@ -88,6 +109,7 @@ extension TrendUI {
                 date: date(daysAgo: 1)
             ),
             TrendUI(
+                id: "arxiv|quantum-computing",
                 title: "Quantum Computing",
                 source: "arXiv",
                 sourceCategory: .academic,
@@ -97,6 +119,7 @@ extension TrendUI {
                 date: date(daysAgo: 2)
             ),
             TrendUI(
+                id: "reddit|bitcoin",
                 title: "Bitcoin",
                 source: "Reddit",
                 sourceCategory: .social,
@@ -106,6 +129,7 @@ extension TrendUI {
                 date: date(daysAgo: 0)
             ),
             TrendUI(
+                id: "gdelt|climate-change",
                 title: "Climate Change",
                 source: "GDELT",
                 sourceCategory: .news,
@@ -115,6 +139,7 @@ extension TrendUI {
                 date: date(daysAgo: 3)
             ),
             TrendUI(
+                id: "hackernews|react-native",
                 title: "React Native",
                 source: "HackerNews",
                 sourceCategory: .tech,
@@ -124,6 +149,7 @@ extension TrendUI {
                 date: date(daysAgo: 2)
             ),
             TrendUI(
+                id: "arxiv|crispr",
                 title: "CRISPR",
                 source: "arXiv",
                 sourceCategory: .academic,
@@ -133,6 +159,7 @@ extension TrendUI {
                 date: date(daysAgo: 4)
             ),
             TrendUI(
+                id: "wikipedia|tesla",
                 title: "Tesla",
                 source: "Wikipedia",
                 sourceCategory: .encyclopedia,
@@ -142,6 +169,7 @@ extension TrendUI {
                 date: date(daysAgo: 1)
             ),
             TrendUI(
+                id: "stackexchange|swiftui",
                 title: "SwiftUI",
                 source: "StackExchange",
                 sourceCategory: .tech,
@@ -151,6 +179,7 @@ extension TrendUI {
                 date: date(daysAgo: 0)
             ),
             TrendUI(
+                id: "gdelt|ukraine",
                 title: "Ukraine",
                 source: "GDELT",
                 sourceCategory: .news,
@@ -160,6 +189,7 @@ extension TrendUI {
                 date: date(daysAgo: 1)
             ),
             TrendUI(
+                id: "arxiv|llm-fine-tuning",
                 title: "LLM Fine-tuning",
                 source: "arXiv",
                 sourceCategory: .academic,

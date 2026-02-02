@@ -26,15 +26,15 @@ struct TrendCardView: View {
                 .lineLimit(2)
 
             HStack {
-                Label(formattedMentions, systemImage: "chart.bar.fill")
+                Label(trend.mentionsText, systemImage: "chart.bar.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 HStack(spacing: 2) {
-                    Image(systemName: trend.changePercent >= 0 ? "arrow.up.right" : "arrow.down.right")
-                    Text(String(format: "%.1f%%", abs(trend.changePercent)))
+                    Image(systemName: trend.changeIcon)
+                    Text(trend.changeText)
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(trend.changePercent >= 0 ? .green : .red)
@@ -43,14 +43,6 @@ struct TrendCardView: View {
         .cardStyle()
     }
 
-    private var formattedMentions: String {
-        if trend.mentions >= 1_000_000 {
-            return String(format: "%.1fM", Double(trend.mentions) / 1_000_000)
-        } else if trend.mentions >= 1_000 {
-            return String(format: "%.1fK", Double(trend.mentions) / 1_000)
-        }
-        return "\(trend.mentions)"
-    }
 }
 
 #Preview {

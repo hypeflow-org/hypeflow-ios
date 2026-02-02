@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     var body: some View {
-        List {
+        Form {
             Section("Data Sources") {
                 ForEach(TrendUI.SourceCategory.allCases, id: \.self) { category in
                     Label(category.displayName, systemImage: category.iconName)
