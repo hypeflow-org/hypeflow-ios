@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct hypeflow_iosApp: App {
@@ -13,5 +14,6 @@ struct hypeflow_iosApp: App {
         WindowGroup {
             RootView()
         }
+        .modelContainer(for: [FavoriteTrend.self, SavedSearch.self])
     }
 }

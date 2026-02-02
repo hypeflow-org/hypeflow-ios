@@ -1,7 +1,19 @@
 import SwiftUI
+import SwiftData
 
 struct TrendDetailsView: View {
     let trend: TrendUI
+
+    @Environment(\.modelContext) private var modelContext
+    @Query private var favorites: [FavoriteTrend]
+
+    private var isFavorite: Bool { !favorites.isEmpty }
+
+    init(trend: TrendUI) {
+        self.trend = trend
+        let trendId = trend.id
+        _favorites = Query(filter: #Predicate<FavoriteTrend> { $0.trendId == trendId })
+    }
 
     var body: some View {
         ScrollView {
@@ -63,8 +75,31 @@ struct TrendDetailsView: View {
         }
         .navigationTitle(trend.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    toggleFavorite()
+                } label: {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(isFavorite ? .yellow : .secondary)
+                }
+            }
+        }
     }
 
+    private func toggleFavorite() {
+        if let existing = favorites.first {
+            modelContext.delete(existing)
+        } else {
+            let favorite = FavoriteTrend(
+                trendId: trend.id,
+                title: trend.title,
+                source: trend.source,
+                sourceCategory: trend.sourceCategory.rawValue
+            )
+            modelContext.insert(favorite)
+        }
+    }
 }
 
 // MARK: - Stat subview
