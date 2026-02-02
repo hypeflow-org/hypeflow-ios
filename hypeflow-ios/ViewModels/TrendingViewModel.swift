@@ -3,27 +3,46 @@ import Foundation
 @MainActor
 @Observable
 final class TrendingViewModel {
-    var state: LoadState<[TrendUI]> = .idle
+    var state: LoadState<[TrendCardModel]> = .idle
     var alertMessage: String?
+    var mode: TrendingMode = .recent
 
     private let client: APIClientProtocol
 
-    init(client: APIClientProtocol = APIClient()) {
-        self.client = client
+    init(client: APIClientProtocol? = nil) {
+        self.client = client ?? APIClient()
     }
 
-    func loadTrends(isRefresh: Bool = false) async {
-        if !isRefresh {
-            state = .loading
-        }
+    func loadTrends(settings: AppSettings, mode: TrendingMode? = nil, isRefresh: Bool = false) async {
+        if let mode { self.mode = mode }
+        if !isRefresh { state = .loading }
 
         do {
-            let dtos = try await client.fetchTrending()
-            let merged = mergeDuplicates(dtos)
-            var trends = merged.map { $0.toTrendUI() }
-            trends = await enrichWithTimeseries(trends)
-            state = trends.isEmpty ? .empty : .success(trends)
+            let response = try await client.fetchTrends(
+                mode: self.mode.rawValue,
+                limit: 15,
+                days: settings.useCustomDates ? nil : settings.timeframeDays,
+                startDate: settings.useCustomDates ? settings.startDate : nil,
+                endDate: settings.useCustomDates ? settings.endDate : nil,
+                sources: nil
+            )
+
+            guard !Task.isCancelled else { return }
+            settings.reportAPIResult(error: nil)
+
+            let range = "\(response.startDate) \u{2013} \(response.endDate)"
+            var seen = Set<String>()
+            let models = response.items.compactMap { item -> TrendCardModel? in
+                guard seen.insert(item.id).inserted else { return nil }
+                var m = TrendCardModel.from(item)
+                m.dateRange = range
+                return m
+            }
+            state = models.isEmpty ? .empty : .success(models)
+        } catch is CancellationError {
         } catch {
+            guard !Task.isCancelled else { return }
+            settings.reportAPIResult(error: error)
             alertMessage = (error as? LocalizedError)?.errorDescription
                 ?? error.localizedDescription
 
@@ -31,92 +50,6 @@ final class TrendingViewModel {
                 return
             }
             state = .error(error)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func mergeDuplicates(_ dtos: [TrendDTO]) -> [TrendDTO] {
-        var map: [String: TrendDTO] = [:]
-
-        for dto in dtos {
-            let key = "\(dto.word.lowercased())|\(dto.startDate)|\(dto.endDate)"
-            if var existing = map[key] {
-                let mergedSources = Array(Set(existing.sources + dto.sources))
-                let mergedMentions = (existing.totalMentions ?? 0) + (dto.totalMentions ?? 0)
-                let newerSearchedAt = dto.searchedAt > existing.searchedAt ? dto.searchedAt : existing.searchedAt
-
-                existing = TrendDTO(
-                    word: existing.word,
-                    startDate: existing.startDate,
-                    endDate: existing.endDate,
-                    sources: mergedSources,
-                    totalMentions: mergedMentions == 0 ? existing.totalMentions : mergedMentions,
-                    searchedAt: newerSearchedAt
-                )
-                map[key] = existing
-            } else {
-                map[key] = dto
-            }
-        }
-
-        return Array(map.values).sorted { $0.searchedAt > $1.searchedAt }
-    }
-
-    private func enrichWithTimeseries(_ trends: [TrendUI]) async -> [TrendUI] {
-        let storedTimeframe = UserDefaults.standard.integer(forKey: "timeframe")
-        let days = storedTimeframe > 0 ? storedTimeframe : 7
-        let calendar = Calendar.current
-        let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -days, to: endDate)!
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        let sourcesRaw = UserDefaults.standard.string(forKey: "enabledSourceIds") ?? ""
-        let enabledSources: [String]? = sourcesRaw.isEmpty
-            ? nil
-            : sourcesRaw.split(separator: ",").map(String.init)
-
-        let slice = trends.prefix(6) // keep lightweight
-        var timeseriesMap: [String: TimeseriesResponseDTO] = [:]
-
-        await withTaskGroup(of: (String, TimeseriesResponseDTO?).self) { group in
-            for trend in slice {
-                group.addTask {
-                    let request = TimeseriesRequestDTO(
-                        word: trend.keyword,
-                        startDate: formatter.string(from: startDate),
-                        endDate: formatter.string(from: endDate),
-                        sources: enabledSources
-                    )
-                    do {
-                        let response = try await self.client.fetchTimeseries(request)
-                        return (trend.id, response)
-                    } catch {
-                        return (trend.id, nil)
-                    }
-                }
-            }
-
-            for await result in group {
-                if let dto = result.1 {
-                    timeseriesMap[result.0] = dto
-                }
-            }
-        }
-
-        return trends.map { trend in
-            guard let ts = timeseriesMap[trend.id] else { return trend }
-            var updated = trend
-            let values = ts.dailyStatistics.map { Double($0.mentions) }
-            updated.sparklineValues = values
-            if let first = values.first, let last = values.last, first != 0 {
-                updated.changePercent = ((last - first) / first) * 100
-            }
-            return updated
         }
     }
 }

@@ -2,7 +2,17 @@ import SwiftUI
 
 struct SourceBadgeView: View {
     let source: String
-    let category: TrendUI.SourceCategory
+    let category: SourceCategory
+
+    init(source: String, category: SourceCategory) {
+        self.source = source
+        self.category = category
+    }
+
+    init(sourceInfo: SourceInfo) {
+        self.source = sourceInfo.title
+        self.category = sourceInfo.category
+    }
 
     var body: some View {
         Label(source, systemImage: category.iconName)
@@ -30,7 +40,7 @@ struct SourceBadgeView: View {
 
 struct SourceBadgeModifier: ViewModifier {
     let source: String
-    let category: TrendUI.SourceCategory
+    let category: SourceCategory
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .topTrailing) {
@@ -41,7 +51,7 @@ struct SourceBadgeModifier: ViewModifier {
 }
 
 extension View {
-    func sourceBadge(source: String, category: TrendUI.SourceCategory) -> some View {
+    func sourceBadge(source: String, category: SourceCategory) -> some View {
         modifier(SourceBadgeModifier(source: source, category: category))
     }
 }

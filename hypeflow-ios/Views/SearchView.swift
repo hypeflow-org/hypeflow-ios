@@ -3,7 +3,9 @@ import SwiftData
 
 struct SearchView: View {
     @State private var viewModel = SearchViewModel()
+    @State private var selectedPointIndex: Int?
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppSettings.self) private var settings
     @Query(sort: \SavedSearch.createdAt, order: .reverse) private var recentSearches: [SavedSearch]
 
     var body: some View {
@@ -33,7 +35,7 @@ struct SearchView: View {
                     Text("Could not complete the search. Please try again.")
                 } actions: {
                     Button("Retry") {
-                        Task { await viewModel.search() }
+                        viewModel.search(settings: settings)
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -42,7 +44,8 @@ struct SearchView: View {
         .animation(.default, value: viewModel.state.caseName)
         .searchable(text: $viewModel.query, prompt: "Search trends")
         .onSubmit(of: .search) {
-            Task { await viewModel.search() }
+            selectedPointIndex = nil
+            viewModel.search(settings: settings)
         }
         .navigationTitle("Search")
         .safeAreaInset(edge: .top) {
@@ -50,7 +53,7 @@ struct SearchView: View {
                 controlRow
                     .padding(.horizontal)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
+                    .background(.ultraThinMaterial, ignoresSafeAreaEdges: [])
             }
         }
         .toolbar {
@@ -91,7 +94,7 @@ struct SearchView: View {
                     ForEach(recentSearches.prefix(10)) { search in
                         Button {
                             viewModel.query = search.query
-                            Task { await viewModel.search() }
+                            viewModel.search(settings: settings)
                         } label: {
                             Label(search.query, systemImage: "clock")
                         }
@@ -104,7 +107,7 @@ struct SearchView: View {
                     ForEach(viewModel.popular) { word in
                         Button {
                             viewModel.query = word.word
-                            Task { await viewModel.search() }
+                            viewModel.search(settings: settings)
                         } label: {
                             HStack {
                                 Label(word.word, systemImage: "chart.line.uptrend.xyaxis")
@@ -128,13 +131,48 @@ struct SearchView: View {
             VStack(spacing: 16) {
                 summaryCard(response)
 
-                if !response.dailyStatistics.isEmpty {
+                let daily = response.dailyStatistics.sorted { $0.date < $1.date }
+                if !daily.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Activity")
                             .font(.headline)
+                        if !response.perSource.isEmpty {
+                            sourcesMenu(response: response)
+                                .font(.subheadline)
+                        }
 
-                        SparklineView(values: response.dailyStatistics.map { Double($0.mentions) })
-                            .frame(height: 80)
+                        let values = daily.map { Double($0.mentions) }
+                        SparklineView(
+                            values: values,
+                            selectedIndex: selectedPointIndex,
+                            onSelect: { idx in selectedPointIndex = idx }
+                        )
+                        .frame(height: 80)
+
+                        HStack {
+                            if let first = daily.first {
+                                Text(first.date)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if let idx = selectedPointIndex,
+                               idx >= 0, idx < daily.count {
+                                let point = daily[idx]
+                                Text("\(point.date): \(point.mentions)")
+                                    .font(.caption.weight(.semibold))
+                            } else if let last = daily.last {
+                                Text("Last: \(last.mentions)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
+                            Spacer()
+                            if let last = daily.last {
+                                Text(last.date)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                     .cardStyle()
                 }
@@ -148,10 +186,35 @@ struct SearchView: View {
                 }
 
                 if !response.dailyStatistics.isEmpty {
-                    dailyStatsSection(response.dailyStatistics)
+                    DisclosureGroup("Daily Statistics") {
+                        dailyStatsSection(response.dailyStatistics.sorted { $0.date < $1.date })
+                    }
+                    .cardStyle()
                 }
             }
             .padding()
+        }
+    }
+
+    // MARK: - Sources Menu
+
+    @ViewBuilder
+    private func sourcesMenu(response: TimeseriesResponseDTO) -> some View {
+        if !response.perSource.isEmpty {
+            Menu {
+                Button("All sources") {
+                    selectedPointIndex = nil
+                    viewModel.search(settings: settings)
+                }
+                ForEach(response.perSource) { source in
+                    Button(source.source.capitalized) {
+                        selectedPointIndex = nil
+                        viewModel.search(settings: settings, sourceOverride: [source.source])
+                    }
+                }
+            } label: {
+                Label("Sources", systemImage: "line.3.horizontal.decrease.circle")
+            }
         }
     }
 
@@ -222,13 +285,6 @@ struct SearchView: View {
             .buttonStyle(.bordered)
 
             Spacer()
-
-            NavigationLink {
-                SettingsView()
-            } label: {
-                Label("Search settings", systemImage: "slider.horizontal.3")
-            }
-            .buttonStyle(.borderless)
         }
         .font(.subheadline)
     }
@@ -261,10 +317,7 @@ struct SearchView: View {
     // MARK: - Daily Stats
 
     private func dailyStatsSection(_ stats: [TimeseriesResponseDTO.DailyStatDTO]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Daily Statistics")
-                .font(.headline)
-
+        VStack(alignment: .leading, spacing: 4) {
             ForEach(stats) { stat in
                 HStack {
                     Text(stat.date)
@@ -276,7 +329,6 @@ struct SearchView: View {
                 .padding(.vertical, 2)
             }
         }
-        .cardStyle()
     }
 
     // MARK: - Save Search
@@ -284,8 +336,15 @@ struct SearchView: View {
     private func saveSearch() {
         let trimmed = viewModel.lastSearchedQuery
         guard !trimmed.isEmpty else { return }
-        guard recentSearches.first?.query != trimmed else { return }
-        let search = SavedSearch(query: trimmed)
+        let lowered = trimmed.lowercased()
+        guard !recentSearches.contains(where: { $0.query.lowercased() == lowered }) else { return }
+        let search = SavedSearch(
+            query: trimmed,
+            snapshotDays: settings.useCustomDates ? nil : settings.timeframeDays,
+            snapshotStartDate: settings.startDate,
+            snapshotEndDate: settings.endDate,
+            snapshotSourcesRaw: settings.enabledSourceIds.isEmpty ? nil : settings.enabledSourceIds.joined(separator: ",")
+        )
         modelContext.insert(search)
     }
 }
@@ -295,4 +354,5 @@ struct SearchView: View {
         SearchView()
     }
     .modelContainer(for: [FavoriteTrend.self, SavedSearch.self], inMemory: true)
+    .environment(AppSettings())
 }

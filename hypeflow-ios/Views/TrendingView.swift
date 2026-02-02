@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TrendingView: View {
     @State private var viewModel = TrendingViewModel()
+    @Environment(AppSettings.self) private var settings
+    @State private var selectedMode: TrendingMode = .recent
 
     var body: some View {
         Group {
@@ -15,7 +17,7 @@ struct TrendingView: View {
                     LazyVStack(spacing: 12) {
                         ForEach(trends) { trend in
                             NavigationLink(value: trend) {
-                                TrendCardView(trend: trend)
+                                TrendCardView(model: trend)
                             }
                             .buttonStyle(.plain)
                         }
@@ -23,7 +25,7 @@ struct TrendingView: View {
                     .padding(.horizontal)
                 }
                 .refreshable {
-                    await viewModel.loadTrends(isRefresh: true)
+                    await viewModel.loadTrends(settings: settings, mode: selectedMode, isRefresh: true)
                 }
 
             case .empty:
@@ -40,20 +42,30 @@ struct TrendingView: View {
                     Text("Could not load trends. Please try again.")
                 } actions: {
                     Button("Retry") {
-                        Task { await viewModel.loadTrends() }
+                        Task { await viewModel.loadTrends(settings: settings, mode: selectedMode) }
                     }
                     .buttonStyle(.borderedProminent)
                 }
             }
         }
         .navigationTitle("Trends")
-        .navigationDestination(for: TrendUI.self) { trend in
-            TrendDetailsView(trend: trend)
-        }
-        .task {
-            if case .idle = viewModel.state {
-                await viewModel.loadTrends()
+        .safeAreaInset(edge: .top) {
+            Picker("Mode", selection: $selectedMode) {
+                Text("Recent").tag(TrendingMode.recent)
+                Text("Popular").tag(TrendingMode.popular)
             }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, ignoresSafeAreaEdges: [])
+        }
+        .navigationDestination(for: TrendCardModel.self) { model in
+            TrendDetailsView(model: model)
+                .id(model.id)
+        }
+        .task(id: "\(settings.sourcesLoaded)|\(settings.useCustomDates ? "\(settings.customStartDateRaw)|\(settings.customEndDateRaw)" : "\(settings.timeframeDays)")|\(selectedMode.rawValue)") {
+            guard settings.isReady else { return }
+            await viewModel.loadTrends(settings: settings, mode: selectedMode)
         }
         .alert(
             "Error",
@@ -62,7 +74,7 @@ struct TrendingView: View {
                 set: { if !$0 { viewModel.alertMessage = nil } }
             )
         ) {
-            Button("Retry") { Task { await viewModel.loadTrends() } }
+            Button("Retry") { Task { await viewModel.loadTrends(settings: settings, mode: selectedMode) } }
             Button("OK", role: .cancel) { }
         } message: {
             Text(viewModel.alertMessage ?? "")
@@ -74,4 +86,5 @@ struct TrendingView: View {
     NavigationStack {
         TrendingView()
     }
+    .environment(AppSettings())
 }

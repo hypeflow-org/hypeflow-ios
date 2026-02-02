@@ -12,12 +12,14 @@ final class SearchViewModel {
     private(set) var lastSearchedQuery = ""
 
     private let client: APIClientProtocol
+    private var currentTask: Task<Void, Never>?
 
-    init(client: APIClientProtocol = APIClient()) {
-        self.client = client
+    init(client: APIClientProtocol? = nil) {
+        self.client = client ?? APIClient()
     }
 
     func resetToIdle() {
+        currentTask?.cancel()
         state = .idle
         query = ""
     }
@@ -30,52 +32,47 @@ final class SearchViewModel {
         }
     }
 
-    func search() async {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
+    func search(settings: AppSettings, sourceOverride: [String]? = nil) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard trimmed.count >= 2 else {
             alertMessage = "Please enter at least 2 characters."
             return
         }
 
-        state = .loading
+        let isNewQuery = trimmed.lowercased() != lastSearchedQuery.lowercased()
 
-        let calendar = Calendar.current
-        let endDate = Date()
-        let storedTimeframe = UserDefaults.standard.integer(forKey: "timeframe")
-        let days = storedTimeframe > 0 ? storedTimeframe : 7
-        let startDate = calendar.date(byAdding: .day, value: -days, to: endDate)!
+        currentTask?.cancel()
+        currentTask = Task { @MainActor in
+            state = .loading
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
+            let request = settings.makeTimeseriesRequest(
+                word: trimmed,
+                sourceOverride: sourceOverride
+            )
 
-        let sourcesRaw = UserDefaults.standard.string(forKey: "enabledSourceIds") ?? ""
-        let enabledSources: [String]? = sourcesRaw.isEmpty
-            ? nil
-            : sourcesRaw.split(separator: ",").map(String.init)
-
-        let request = TimeseriesRequestDTO(
-            word: trimmed,
-            startDate: formatter.string(from: startDate),
-            endDate: formatter.string(from: endDate),
-            sources: enabledSources
-        )
-
-        do {
-            let response = try await client.fetchTimeseries(request)
-            if response.totalMentions == 0 && response.dailyStatistics.isEmpty {
-                state = .empty
-            } else {
-                state = .success(response)
+            do {
+                let response = try await client.fetchTimeseries(request)
+                guard !Task.isCancelled else { return }
+                settings.reportAPIResult(error: nil)
+                if response.totalMentions == 0 && response.dailyStatistics.isEmpty {
+                    state = .empty
+                } else {
+                    state = .success(response)
+                }
+                lastSearchedQuery = trimmed
+                if isNewQuery {
+                    successCount += 1
+                }
+            } catch is CancellationError {
+                // cancelled - do nothing
+            } catch {
+                guard !Task.isCancelled else { return }
+                settings.reportAPIResult(error: error)
+                alertMessage = (error as? LocalizedError)?.errorDescription
+                    ?? error.localizedDescription
+                state = .error(error)
             }
-            lastSearchedQuery = trimmed
-            successCount += 1
-        } catch {
-            alertMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
-            state = .error(error)
         }
     }
 }

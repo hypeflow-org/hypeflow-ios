@@ -32,21 +32,21 @@ protocol APIClientProtocol: Sendable {
     func fetchPopular(limit: Int) async throws -> [PopularWordDTO]
     func fetchTimeseries(_ request: TimeseriesRequestDTO) async throws -> TimeseriesResponseDTO
     func fetchSources() async throws -> [SourceDTO]
+    func fetchTrends(mode: String, limit: Int, days: Int?,
+                     startDate: String?, endDate: String?,
+                     sources: [String]?) async throws -> TrendsResponseDTO
+    func checkHealth() async -> Bool
 }
 
 // MARK: - Implementation
 
-final class APIClient: APIClientProtocol {
+final class APIClient: APIClientProtocol, @unchecked Sendable {
     private let baseURL: String
     private let session: URLSession
-    private let decoder: JSONDecoder
-    private let encoder: JSONEncoder
 
     init(baseURL: String = "http://localhost:8080", session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
-        self.decoder = JSONDecoder()
-        self.encoder = JSONEncoder()
     }
 
     func fetchTrending() async throws -> [TrendDTO] {
@@ -72,6 +72,7 @@ final class APIClient: APIClientProtocol {
         }
 
         do {
+            let decoder = JSONDecoder()
             return try decoder.decode([TrendDTO].self, from: data)
         } catch {
             throw APIError.decodingError(error)
@@ -101,6 +102,7 @@ final class APIClient: APIClientProtocol {
         }
 
         do {
+            let decoder = JSONDecoder()
             return try decoder.decode([PopularWordDTO].self, from: data)
         } catch {
             throw APIError.decodingError(error)
@@ -117,6 +119,7 @@ final class APIClient: APIClientProtocol {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         do {
+            let encoder = JSONEncoder()
             urlRequest.httpBody = try encoder.encode(request)
         } catch {
             throw APIError.encodingError(error)
@@ -140,6 +143,7 @@ final class APIClient: APIClientProtocol {
         }
 
         do {
+            let decoder = JSONDecoder()
             return try decoder.decode(TimeseriesResponseDTO.self, from: data)
         } catch {
             throw APIError.decodingError(error)
@@ -169,9 +173,67 @@ final class APIClient: APIClientProtocol {
         }
 
         do {
+            let decoder = JSONDecoder()
             return try decoder.decode([SourceDTO].self, from: data)
         } catch {
             throw APIError.decodingError(error)
+        }
+    }
+
+    func fetchTrends(mode: String, limit: Int, days: Int?,
+                     startDate: String?, endDate: String?,
+                     sources: [String]?) async throws -> TrendsResponseDTO {
+        guard var components = URLComponents(string: "\(baseURL)/api/trends") else {
+            throw APIError.invalidURL
+        }
+
+        var queryItems = [
+            URLQueryItem(name: "mode", value: mode),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+        if let days { queryItems.append(URLQueryItem(name: "days", value: "\(days)")) }
+        if let startDate { queryItems.append(URLQueryItem(name: "startDate", value: startDate)) }
+        if let endDate { queryItems.append(URLQueryItem(name: "endDate", value: endDate)) }
+        if let sources, !sources.isEmpty {
+            queryItems.append(URLQueryItem(name: "sources", value: sources.joined(separator: ",")))
+        }
+        components.queryItems = queryItems
+
+        guard let url = components.url else { throw APIError.invalidURL }
+
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            throw APIError.networkError(error)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.networkError(URLError(.badServerResponse))
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(statusCode: http.statusCode)
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            return try decoder.decode(TrendsResponseDTO.self, from: data)
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+
+    func checkHealth() async -> Bool {
+        guard let url = URL(string: "\(baseURL)/api/health") else { return false }
+        do {
+            let (_, response) = try await session.data(from: url)
+            guard let http = response as? HTTPURLResponse else { return false }
+            return (200...299).contains(http.statusCode)
+        } catch {
+            return false
         }
     }
 }

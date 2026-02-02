@@ -3,6 +3,8 @@ import SwiftUI
 struct SparklineView: View {
     let values: [Double]
     var lineColor: Color = .blue
+    var selectedIndex: Int? = nil
+    var onSelect: ((Int) -> Void)? = nil
 
     @State private var trimEnd: CGFloat = 0
 
@@ -13,14 +15,16 @@ struct SparklineView: View {
             GeometryReader { geo in
                 let normalized = normalizedValues()
                 let points = points(for: normalized, in: geo.size)
+                let stepX = geo.size.width / CGFloat(max(values.count - 1, 1))
 
                 ZStack {
                     Path { path in
+                        guard let last = points.last else { return }
                         path.move(to: CGPoint(x: points[0].x, y: geo.size.height))
                         for point in points {
                             path.addLine(to: point)
                         }
-                        path.addLine(to: CGPoint(x: points.last!.x, y: geo.size.height))
+                        path.addLine(to: CGPoint(x: last.x, y: geo.size.height))
                         path.closeSubpath()
                     }
                     .fill(
@@ -40,13 +44,42 @@ struct SparklineView: View {
                     }
                     .trim(from: 0, to: trimEnd)
                     .stroke(lineColor, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+
+                    if let selectedIndex,
+                       selectedIndex >= 0, selectedIndex < points.count {
+                        let p = points[selectedIndex]
+                        Circle()
+                            .fill(lineColor)
+                            .frame(width: 8, height: 8)
+                            .position(p)
+                    }
                 }
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 20)
+                        .onChanged { value in
+                            guard let onSelect else { return }
+                            let translation = value.translation
+                            guard abs(translation.width) > abs(translation.height) * 1.5 else { return }
+                            let rawIndex = Int(round(value.location.x / stepX))
+                            let idx = max(0, min(values.count - 1, rawIndex))
+                            onSelect(idx)
+                        }
+                )
             }
             .onAppear {
-                withAnimation(.easeOut(duration: 0.6)) {
-                    trimEnd = 1
-                }
+                animateIn()
             }
+            .onChange(of: values) {
+                animateIn()
+            }
+        }
+    }
+
+    private func animateIn() {
+        trimEnd = 0
+        withAnimation(.easeOut(duration: 0.6)) {
+            trimEnd = 1
         }
     }
 

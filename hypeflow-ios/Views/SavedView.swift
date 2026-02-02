@@ -34,6 +34,10 @@ struct SavedView: View {
             }
         }
         .navigationTitle("Saved")
+        .navigationDestination(for: TrendCardModel.self) { model in
+            TrendDetailsView(model: model)
+                .id(model.id)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Clear All", role: .destructive) {
@@ -65,28 +69,20 @@ struct SavedView: View {
         } else {
             List {
                 ForEach(favorites) { favorite in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(favorite.title)
-                                .font(.body.weight(.medium))
-                            if let category = TrendUI.SourceCategory(rawValue: favorite.sourceCategory) {
-                                SourceBadgeView(source: favorite.source, category: category)
-                            } else {
-                                Text(favorite.source)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                    let model = TrendCardModel.from(favorite)
+                    NavigationLink(value: model) {
+                        TrendCardView(model: model, style: .compact)
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            modelContext.delete(favorite)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
-
-                        Spacer()
-
-                        Text(favorite.addedAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
-                .onDelete(perform: deleteFavorites)
             }
+            .listStyle(.plain)
         }
     }
 
@@ -103,22 +99,20 @@ struct SavedView: View {
         } else {
             List {
                 ForEach(searches) { search in
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-
-                        Text(search.query)
-                            .font(.body)
-
-                        Spacer()
-
-                        Text(search.createdAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    let model = TrendCardModel.from(search)
+                    NavigationLink(value: model) {
+                        TrendCardView(model: model, style: .compact)
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            modelContext.delete(search)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
-                .onDelete(perform: deleteSearches)
             }
+            .listStyle(.plain)
         }
     }
 
@@ -128,18 +122,6 @@ struct SavedView: View {
         switch selectedSegment {
         case .favorites: return favorites.isEmpty
         case .history: return searches.isEmpty
-        }
-    }
-
-    private func deleteFavorites(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(favorites[index])
-        }
-    }
-
-    private func deleteSearches(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(searches[index])
         }
     }
 
